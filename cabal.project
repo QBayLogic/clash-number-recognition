@@ -1,0 +1,4 @@
+packages:
+  number-recognition.cabal
+
+write-ghc-environment-files: always
