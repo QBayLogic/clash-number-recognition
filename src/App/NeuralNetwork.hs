@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Eta reduce" #-}
 module App.NeuralNetwork (topEntity) where
 
 import Clash.Prelude
@@ -80,7 +82,7 @@ pwm10 ::
   -> Signal dom (Vec 10 Bool)
 pwm10 inp = mealy go (0, Up) inp
   where
-    go state inp = (newState, out)
+    go state i = (newState, out)
      where
       (counter, direction) = state
       newState = (newCounter, newDirection)
@@ -88,7 +90,7 @@ pwm10 inp = mealy go (0, Up) inp
         | allOn = Up
         | allOff = Down
         | otherwise = direction
-      out = fmap (>counter) inp
+      out = fmap (>counter) i
       allOn = and out
       allOff = not $ or out
       newCounter = satAdd SatWrap counter $ case newDirection of

@@ -4,10 +4,6 @@ module App.CameraInterface where
 
 import Clash.Prelude
 
--- Both Data.List and Data.Ord are used for the repl helper functions
-import qualified Data.List as L
-import qualified Data.Ord as Ord
-
 type Xcounter = Index 640
 type Ycounter = Index 480
 
@@ -136,58 +132,3 @@ stateToOutputWriter :: BayerState -> PxVal -> Maybe (NNInputAddress, PxVal)
 stateToOutputWriter s p = case s of
   CombinePixel (outAddr, _) -> Just (outAddr, p)
   _ -> Nothing
-
-
--- Helper functions for testing in repl
-
-yxs :: HiddenClockResetEnable dom => Signal dom (Ycounter, Xcounter)
-yxs = register (185,0) (yxCounter <$> yxs)
-
-outState :: HiddenClockResetEnable dom => Signal dom BayerState
-outState = register (IgnorePixel (0,0)) (bayerStateMachine <$> outState <*> yxs)
-
-simulateBayer :: Int -> [((Ycounter, Xcounter), BayerState)]
-simulateBayer n = L.zip (sampleN @System n yxs) (sampleN @System n outState)
-
-showBayerSimulation :: Int -> Int -> IO()
-showBayerSimulation n showNr = putStr (unlines (L.map show out))
-  where
-    out = lastN showNr (simulateBayer n)
-
-wc ::
-  HiddenClockResetEnable dom =>
-  Signal dom (VS, HS) ->
-  Signal dom (Ycounter, Xcounter)
-wc inp = mealy coordinateCounter (False, False, 0, 0) inp
-
-
-yxCounter :: (Ycounter, Xcounter) -> (Ycounter, Xcounter)
-yxCounter (y,x)
-  | x == maxBound = (satSucc SatWrap y, 0)
-  | otherwise     = (y, succ x)
-
-syncPattern :: [(VS, HS)]
-syncPattern =
-  L.replicate 400 (False, False)
-    <> L.replicate (45 * 793) (True, False)
-    <> L.concat
-      ( L.replicate
-          480
-          ( L.replicate 152 (True, False)
-              <> L.replicate 640 (True, True)
-          )
-      )
-    <> [(True, False)]
-    <> L.repeat (False, False)
-
-lastXY :: Int -> (Ycounter, Xcounter)
-lastXY n = L.last $ L.take n $ simulate @System wc syncPattern
-
-maxY :: [(Ycounter, Xcounter)] -> (Ycounter, Xcounter)
-maxY a = L.maximumBy (Ord.comparing fst) a
-
-maxX :: [(Ycounter, Xcounter)] -> (Ycounter, Xcounter)
-maxX a = L.maximumBy (Ord.comparing snd) a
-
-lastN :: Int -> [a] -> [a]
-lastN n xs = L.drop (L.length xs - n) xs
