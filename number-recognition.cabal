@@ -73,8 +73,7 @@ common common-options
     --cabal-test-quickcheck,
     QuickCheck,
     tasty >= 1.2 && < 1.5,
-    tasty-quickcheck,
-    JuicyPixels
+    tasty-quickcheck
 
 custom-setup
   setup-depends:

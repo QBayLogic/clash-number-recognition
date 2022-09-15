@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Eta reduce" #-}
-module App.NeuralNetwork (topEntity) where
+module App.NeuralNetwork where
 
 import Clash.Prelude
 import Clash.Intel.ClockGen
