@@ -2,8 +2,7 @@
 
 module Tests.Clash.NumberRecognition.NeuralNetwork where
 
-import Prelude
-import qualified Clash.Prelude as P
+import Clash.Prelude
 import qualified Test.Tasty as T
 import qualified Test.Tasty.QuickCheck as T
 

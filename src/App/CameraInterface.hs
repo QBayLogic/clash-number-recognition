@@ -3,6 +3,7 @@
 module App.CameraInterface where
 
 import Clash.Prelude
+import Debug.Trace
 
 type Xcounter = Index 640
 type Ycounter = Index 480
@@ -56,8 +57,11 @@ d8mProcessing pxD vs hs = stateToOutputWriter <$> state <*> pxGrey
 
 -- Greyscaling using shifts closest to luminosity algorithm (second blue is ignored)
 greyscaleShiftingBayer :: (PxVal, PxVal, PxVal, PxVal) -> PxVal
-greyscaleShiftingBayer (r, g0, g1, b) = sum (zipWith shiftR rgb shifts)
+greyscaleShiftingBayer (r, g0, g1, b) = grey
   where
+    -- inputString = "RGGB = (" <> show r <> ", " <> show g0 <> ", " <> show g1 <> ", " <> show b <> ") -> " <> show grey
+    -- out = trace inputString grey
+    grey   = sum (zipWith shiftR rgb shifts)
     rgb    = r :> r :> g0 :> g0 :> g1 :> g1 :> b :> Nil
     shifts = 2 :> 4 :> 2  :> 5  :> 2  :> 5  :> 3 :> Nil
 

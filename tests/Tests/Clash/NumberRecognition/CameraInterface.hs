@@ -4,14 +4,14 @@
 
 module Tests.Clash.NumberRecognition.CameraInterface where
 
-import Prelude
-import Clash.Prelude (Signal, HiddenClockResetEnable, System)
-import qualified Clash.Prelude as P
+
+import Clash.Prelude
 import qualified Test.Tasty as T
 import qualified Test.Tasty.QuickCheck as T
 
 import qualified Data.List as L
 import qualified Data.Ord as Ord (comparing)
+import Data.Maybe (catMaybes)
 
 import App.CameraInterface
 
@@ -22,17 +22,47 @@ tests =
   ]
 
 
+d8mHelper (unbundle -> (a, b, c)) = d8mProcessing a b c
+
+d8mSim :: IO [(NNInputAddress, PxVal)]
+d8mSim = out
+  where
+    out = catMaybes <$> outVal
+    outVal = do
+      px <- loadPixeldata
+      vs <- loadVS
+      hs <- loadHS
+      return (simulate @System d8mHelper (L.zip3 px vs hs))
+      
+
+loadPixeldata :: IO [PxDataRaw]
+loadPixeldata = do 
+  let filepath = "tests/Tests/Clash/NumberRecognition/pixeldata.txt"
+  fmap (pack . flip shiftL 2 . read @(Unsigned 10)) . lines <$> readFile filepath
+
+loadVS :: IO [VS]
+loadVS = do 
+  let filepath = "tests/Tests/Clash/NumberRecognition/vs.txt"
+  fmap ((> 0) . read @(Unsigned 1)) . lines <$> readFile filepath
+
+loadHS :: IO [HS]
+loadHS = do 
+  let filepath = "tests/Tests/Clash/NumberRecognition/hs.txt"
+  fmap ((> 0) . read @(Unsigned 1)) . lines <$> readFile filepath
+
+
+
 -- Helper functions for testing
 yxs :: HiddenClockResetEnable dom => Signal dom (Ycounter, Xcounter)
-yxs = P.register (185,0) (yxCounter <$> yxs)
+yxs = register (185,0) (yxCounter <$> yxs)
 
 outState :: HiddenClockResetEnable dom => Signal dom BayerState
-outState = P.register (IgnorePixel (0,0)) (bayerStateMachine <$> outState <*> yxs)
+outState = register (IgnorePixel (0,0)) (bayerStateMachine <$> outState <*> yxs)
 
 simulateBayer :: Int -> [((Ycounter, Xcounter), BayerState)]
-simulateBayer n = L.zip (P.sampleN @System n yxs) (P.sampleN @System n outState)
+simulateBayer n = L.zip (sampleN @System n yxs) (sampleN @System n outState)
 
-showBayerSimulation :: Int -> Int -> IO()
+showBayerSimulation :: Int -> Int -> IO ()
 showBayerSimulation n showNr = putStr (unlines (L.map show out))
   where
     out = lastN showNr (simulateBayer n)
@@ -41,12 +71,12 @@ coordCntr ::
   HiddenClockResetEnable dom =>
   Signal dom (VS, HS) ->
   Signal dom (Ycounter, Xcounter)
-coordCntr inp = P.mealy coordinateCounter (False, False, 0, 0) inp
+coordCntr inp = mealy coordinateCounter (False, False, 0, 0) inp
 
 
 yxCounter :: (Ycounter, Xcounter) -> (Ycounter, Xcounter)
 yxCounter (y,x)
-  | x == maxBound = (P.satSucc P.SatWrap y, 0)
+  | x == maxBound = (satSucc SatWrap y, 0)
   | otherwise     = (y, succ x)
 
 syncPattern :: [(VS, HS)]
@@ -64,7 +94,7 @@ syncPattern =
     <> L.repeat (False, False)
 
 lastXY :: Int -> (Ycounter, Xcounter)
-lastXY n = L.last $ L.take n $ P.simulate @P.System coordCntr syncPattern
+lastXY n = L.last $ L.take n $ simulate @System coordCntr syncPattern
 
 maxY :: [(Ycounter, Xcounter)] -> (Ycounter, Xcounter)
 maxY a = L.maximumBy (Ord.comparing fst) a
