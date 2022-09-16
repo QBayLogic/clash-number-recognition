@@ -12,6 +12,8 @@ import qualified Test.Tasty.QuickCheck as T
 import qualified Data.List as L
 import qualified Data.Ord as Ord (comparing)
 import Data.Maybe (catMaybes)
+import Debug.Trace
+import System.IO
 
 import App.CameraInterface
 
@@ -22,7 +24,8 @@ tests =
   ]
 
 
-d8mHelper (unbundle -> (a, b, c)) = d8mProcessing a b c
+d8mSimVals :: IO [PxVal]
+d8mSimVals = fmap (fmap snd) d8mSim
 
 d8mSim :: IO [(NNInputAddress, PxVal)]
 d8mSim = out
@@ -33,7 +36,8 @@ d8mSim = out
       vs <- loadVS
       hs <- loadHS
       return (simulate @System d8mHelper (L.zip3 px vs hs))
-      
+
+d8mHelper (unbundle -> (a, b, c)) = d8mProcessing a b c      
 
 loadPixeldata :: IO [PxDataRaw]
 loadPixeldata = do 
