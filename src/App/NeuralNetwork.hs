@@ -8,16 +8,22 @@ import Clash.Intel.ClockGen
 import Clash.Annotations.SynthesisAttributes
 
 import Data.Maybe
+import Debug.Trace
+import qualified Data.List as L
 
-import App.CameraInterface (PxVal)
 import App.NNParamsList (NNParam, biasesList, weightsList)
 import App.InputImageVector (inputImage)
 
 
--- FirstLayer (selectedInput, selectedNode)
--- SecondLayer (selectedInput, selectedNode)
-data NetworkState = FirstLayer (Index 784, Index 10)
-                  | SecondLayer (Index 10, Index 10)
+type InputAddress = Index 784
+type HiddenLayerAddress = Index 10
+type OutputAddress = Index 10
+type WeightAddr = Index 7940
+type BiasAddr = Index 20
+type InFirstLayer = Bool
+
+data NetworkState = FirstLayer (InputAddress, HiddenLayerAddress)
+                  | SecondLayer (HiddenLayerAddress, OutputAddress)
                   | Waiting
                   deriving (Generic, NFDataX, Show)
 
@@ -30,109 +36,108 @@ createDomain vSystem{vName="Dom50MHz", vPeriod=20000}
 createDomain vSystem{vName="Dom20MHz", vPeriod=50000}
 
 
-{-# ANN topEntity
-  (Synthesize
-    { t_name   = "neuralNetwork"
-    , t_inputs = [ PortName "CLOCK_50"
-                 , PortName "KEY0"
-                 ]
-    , t_output = PortProduct "" [PortName "LEDR", PortName "HEX0"]
-    })#-}
+-- {-# ANN topEntity
+--   (Synthesize
+--     { t_name   = "neuralNetwork"
+--     , t_inputs = [ PortName "CLOCK_50"
+--                  , PortName "KEY0"
+--                  ]
+--     , t_output = PortProduct "" [PortName "LEDR", PortName "HEX0"]
+--     })#-}
 
-topEntity
-  :: Clock Dom50MHz
-      `Annotate` 'StringAttr "chip_pin" "AF14"
-  -> Signal Dom50MHz Bool
-      `Annotate` 'StringAttr "chip_pin" "AJ4"
-  -> Signal Dom50MHz (BitVector 10, HexDigit)
-topEntity clk rst = exposeClockResetEnable go clk (unsafeFromLowPolarity rst) enableGen
- where
-  go :: HiddenClockResetEnable Dom50MHz
-    => Signal Dom50MHz (BitVector 10, HexDigit)
-  go = bundle (led_out, hex_out)
-    where
-      led_out = pack <$> pwm10 nn_output
-      hex_out = complement . toSevenSegment . elemMax <$> nn_output
-      nn_output = neuralNet
+-- topEntity
+--   :: Clock Dom50MHz
+--       `Annotate` 'StringAttr "chip_pin" "AF14"
+--   -> Signal Dom50MHz Bool
+--       `Annotate` 'StringAttr "chip_pin" "AJ4"
+--   -> Signal Dom50MHz (BitVector 10, HexDigit)
+-- topEntity clk rst = exposeClockResetEnable go clk (unsafeFromLowPolarity rst) enableGen
+--  where
+--   go :: HiddenClockResetEnable Dom50MHz
+--     => Signal Dom50MHz (BitVector 10, HexDigit)
+--   go = bundle (led_out, hex_out)
+--     where
+--       led_out = pack <$> pwm10 nn_output
+--       hex_out = complement . toSevenSegment . elemMax <$> nn_output
+--       nn_output = neuralNetwork (pure Nothing)
 
-
-neuralNet :: HiddenClockResetEnable dom => Signal dom (Vec 10 NNParam)
-neuralNet = outputVec
+neuralNetwork
+  :: HiddenClockResetEnable dom
+  => Signal dom (Maybe (InputAddress, NNParam))
+  -> Signal dom (Vec 10 NNParam)
+neuralNetwork inputWriter = outputVec
   where
     (state, nodeBegin) = unbundle $ register (FirstLayer (0, 0), True) (stateMachine <$> state)
-    (inpAddr, weightAddr, biasAddr)  = unbundle $ stateToAddress <$> state
+    (inpLayer, inpAddr, hiddenAddr, outAddr, weightAddr, biasAddr) = unbundle (stateToAddr <$> state)
+
     nodeBegin' = register False nodeBegin
-    biasAddr'' = register 0 $ register 0 biasAddr
-    weightBlob = $(memBlobTH Nothing weightsList)
-    biasBlob  = $(memBlobTH Nothing biasesList)
-    input     = blockRam inputImage inpAddr hiddenNode
+    inpLayer' = register True inpLayer
+    inpLayer'' = register True inpLayer'
+    hiddenAddr' = register 0 hiddenAddr
+    hiddenAddr'' = register 0 hiddenAddr'
+    outAddr' = register 0 outAddr
+    outAddr'' = register 0 outAddr'
+
     weight    = unpack <$> blockRamBlob weightBlob weightAddr (pure Nothing)
     bias      = unpack <$> blockRamBlob biasBlob biasAddr (pure Nothing)
     maybeBias = mux nodeBegin' (fmap Just bias) (pure Nothing)
-    ma        = mealy mac 0 (bundle (input, weight, maybeBias))
-    (hiddenNode, outputVec)  = unbundle (mealy nodeWriter (replicate d10 0) (bundle (nodeBegin', biasAddr'', ma)))
+
+    inputVal  = blockRam inputImage inpAddr inputWriter
+    hiddenVal = blockRam (replicate d10 0) hiddenAddr hiddenWriter
+    maInput   = mux inpLayer' inputVal hiddenVal
+    ma        = mealy mac 0 (bundle (maInput, weight, maybeBias))
+
+    hiddenWriter = mux (nodeBegin' .&&. inpLayer'') (Just <$> bundle (hiddenAddr'', relu <$> ma)) (pure Nothing)
+    outputVec = mealy nodeWriter (repeat 0) (bundle (nodeBegin', inpLayer'', outAddr'', ma))
 
 
-data Direction = Up | Down
-  deriving (Generic, NFDataX)
-
-pwm10 ::
-  forall dom u p . (HiddenClockResetEnable dom, KnownNat u, KnownNat p)
-  => Signal dom (Vec 10 (SFixed u p))
-  -> Signal dom (Vec 10 Bool)
-pwm10 inp = mealy go (0, Up) inp
-  where
-    go state i = (newState, out)
-     where
-      (counter, direction) = state
-      newState = (newCounter, newDirection)
-      newDirection
-        | allOn = Up
-        | allOff = Down
-        | otherwise = direction
-      out = fmap (>counter) i
-      allOn = and out
-      allOff = not $ or out
-      newCounter = satAdd SatWrap counter $ case newDirection of
-        Up -> unpack 0b1
-        Down -> unpack (maxBound :: BitVector (u+p))
+weightBlob = $(memBlobTH Nothing weightsList)
+biasBlob  = $(memBlobTH Nothing biasesList)
 
 
 nodeWriter
-  -- Curent state: input vector
   :: Vec 10 NNParam
-  -- Input: (nodeBegin, biasAddr, nodeValue)
-  -> (Bool, Index 20, NNParam)
-  -- (updated state, output)
-  -> (Vec 10 NNParam, (Maybe (Index 794, NNParam), Vec 10 NNParam))
-nodeWriter inputVec (nodeBegin, biasAddr, nodeValue)
-  | nodeBegin && (biasAddr < 10)
-    = (inputVec, (Just (784 + resize biasAddr, relu nodeValue), inputVec))
-  | nodeBegin && (biasAddr > 9)
-    = (outputVec, (Nothing, outputVec))
+  -> (NewNodeFlag, InFirstLayer, OutputAddress, NNParam)
+  -> (Vec 10 NNParam, Vec 10 NNParam)
+nodeWriter inputVec (nodeBegin, inFirstLayer, outAddr, nodeValue)
+  | nodeBegin && not inFirstLayer
+    = (outputVec, inputVec)
   | otherwise
-    = (inputVec, (Nothing, inputVec))
+    = (inputVec, inputVec)
   where
-    outputVec = replace (resize (biasAddr - 10)::Index 10) nodeValue inputVec
+    outputVec = replace outAddr nodeValue inputVec
 
-
-stateToAddress
+-- TODO: Rewrite to record syntax
+stateToAddr
   :: NetworkState
-  -> (Index 794,  -- inputAddress
-      Index 7940, -- weightAddress
-      Index 20)   -- biasAddress
-stateToAddress state = case state of
+  -> (InFirstLayer,
+      InputAddress,
+      HiddenLayerAddress,
+      OutputAddress,
+      WeightAddr,
+      BiasAddr
+  )
+stateToAddr state = case state of
   FirstLayer (inp, node)
-    -> (resize inp, resize inp + (784 * resize node), resize node)
-  SecondLayer (inp, node)
-    -> (resize inp + 784, resize inp + (7840 + 10 * resize node), resize node + 10)
+    -> (True, inp, node, 0, wAddr, resize node)
+    where
+      wAddr = resize inp + (784 * resize node)
+  SecondLayer (node, out)
+    -> (False, 0, node, out, wAddr, bAddr)
+    where
+      wAddr = resize node + (7840 + 10 * resize out)
+      bAddr = 10 + resize out
   Waiting
-    -> (0, 0, 0)
+    -> (False, 0, 0, 0, 0, 0)
+--  where
+--   undefinedAddr = deepErrorX "stateToAddr: address is undefined."
 
+
+type NewNodeFlag = Bool
 
 stateMachine
   :: NetworkState         -- Current state
-  -> (NetworkState, Bool) -- (New state, new node flag)
+  -> (NetworkState, NewNodeFlag) -- (New state, new node flag)
 stateMachine state = case state of
   FirstLayer (inp, node)
     | node == maxBound && inp == maxBound -- End of first layer
@@ -159,9 +164,6 @@ mac acc (x, y, newAcc)
   where
     ma a b c = a + b * c
 
-
-toNNParam :: PxVal -> NNParam
-toNNParam a = resizeF (unpack (zeroExtend (pack a)) :: SFixed 1 8)
 
 relu :: (Num a, Ord a) => a -> a
 relu x

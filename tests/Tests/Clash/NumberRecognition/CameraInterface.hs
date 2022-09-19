@@ -16,6 +16,8 @@ import Debug.Trace
 import System.IO
 
 import App.CameraInterface
+import App.NeuralNetwork (InputAddress)
+import App.NNParamsList (NNParam)
 
 
 tests :: [T.TestTree]
@@ -24,10 +26,10 @@ tests =
   ]
 
 
-d8mSimVals :: IO [PxVal]
+d8mSimVals :: IO [NNParam]
 d8mSimVals = fmap (fmap snd) d8mSim
 
-d8mSim :: IO [(NNInputAddress, PxVal)]
+d8mSim :: IO [(InputAddress, NNParam)]
 d8mSim = out
   where
     out = catMaybes <$> outVal

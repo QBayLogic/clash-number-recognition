@@ -3,7 +3,10 @@
 module App.CameraInterface where
 
 import Clash.Prelude
-import Debug.Trace
+
+import App.NeuralNetwork (InputAddress)
+import App.NNParamsList (NNParam)
+
 
 type Xcounter = Index 640
 type Ycounter = Index 480
@@ -17,20 +20,19 @@ type SyncState = (VS, HS, Ycounter, Xcounter)
 
 
 type LineBufferAddress = Index 56 -- 28*2
-type NNInputAddress = Index 784 -- 28*28
 
 xStart = 264 :: Xcounter  -- (640-112)/2
 xEnd   = 375 :: Xcounter  -- 640 - xStart - 1
 yStart = 184 :: Ycounter  -- (640-112)/2
 yEnd   = 295 :: Ycounter  -- 480 - yStart - 1
 
-data BayerState = IgnorePixel     (NNInputAddress, LineBufferAddress)
-                | StoreRed        (NNInputAddress, LineBufferAddress)
-                | StoreGreen      (NNInputAddress, LineBufferAddress)
-                | IgnorePixelEven (NNInputAddress, LineBufferAddress)
-                | LoadRed         (NNInputAddress, LineBufferAddress)
-                | LoadGreen       (NNInputAddress, LineBufferAddress)
-                | CombinePixel    (NNInputAddress, LineBufferAddress)
+data BayerState = IgnorePixel     (InputAddress, LineBufferAddress)
+                | StoreRed        (InputAddress, LineBufferAddress)
+                | StoreGreen      (InputAddress, LineBufferAddress)
+                | IgnorePixelEven (InputAddress, LineBufferAddress)
+                | LoadRed         (InputAddress, LineBufferAddress)
+                | LoadGreen       (InputAddress, LineBufferAddress)
+                | CombinePixel    (InputAddress, LineBufferAddress)
                 deriving (Generic, NFDataX, Show)
 
 
@@ -41,7 +43,7 @@ d8mProcessing
   => Signal dom PxDataRaw
   -> Signal dom VS
   -> Signal dom HS
-  -> Signal dom (Maybe (NNInputAddress, PxVal))
+  -> Signal dom (Maybe (InputAddress, NNParam))
 d8mProcessing pxD vs hs = stateToOutputWriter <$> state <*> pxGrey
   where
     pxD' = bitCoerce . resize . flip shiftR 2 <$> pxD
@@ -132,7 +134,10 @@ stateToWriter s p = case s of
   StoreGreen (_, wrAddr) -> Just (wrAddr, p)
   _ -> Nothing
 
-stateToOutputWriter :: BayerState -> PxVal -> Maybe (NNInputAddress, PxVal)
+stateToOutputWriter :: BayerState -> PxVal -> Maybe (InputAddress, NNParam)
 stateToOutputWriter s p = case s of
-  CombinePixel (outAddr, _) -> Just (outAddr, p)
+  CombinePixel (outAddr, _) -> Just (outAddr, toNNParam p)
   _ -> Nothing
+
+toNNParam :: PxVal -> NNParam
+toNNParam a = resizeF (unpack (zeroExtend (pack a)) :: SFixed 1 8)
