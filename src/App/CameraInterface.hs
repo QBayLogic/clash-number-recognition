@@ -44,11 +44,12 @@ d8mProcessing
   -> Signal dom VS
   -> Signal dom HS
   -> Signal dom (Maybe (InputAddress, NNParam))
-d8mProcessing pxD vs hs = stateToOutputWriter <$> state <*> pxGrey
+d8mProcessing pxD vs hs = bundle (stateToOutputWriter <$> state <*> pxGrey)
   where
     pxD' = bitCoerce . resize . flip shiftR 2 <$> pxD
-    (y, x) = unbundle (mealy coordinateCounter (False, False, 0, 0) (bundle (vs, hs)))
-    state = register (IgnorePixel (0, 0)) (bayerStateMachine <$> state <*> bundle (y, x))
+    yx = mealy coordinateCounter (False, False, 0, 0) (bundle (vs, hs))
+    state = register (IgnorePixel (0, 0)) (bayerStateMachine <$> state <*> yx)
+
     lineBuffer = blockRam @dom (replicate d56 0) rdAddr writer
     lineBufferReg = register 0 lineBuffer
     pxReg = register 0 pxD'
@@ -61,8 +62,6 @@ d8mProcessing pxD vs hs = stateToOutputWriter <$> state <*> pxGrey
 greyscaleShiftingBayer :: (PxVal, PxVal, PxVal, PxVal) -> PxVal
 greyscaleShiftingBayer (r, g0, g1, b) = grey
   where
-    -- inputString = "RGGB = (" <> show r <> ", " <> show g0 <> ", " <> show g1 <> ", " <> show b <> ") -> " <> show grey
-    -- out = trace inputString grey
     grey   = sum (zipWith shiftR rgb shifts)
     rgb    = r :> r :> g0 :> g0 :> g1 :> g1 :> b :> Nil
     shifts = 2 :> 4 :> 2  :> 5  :> 2  :> 5  :> 3 :> Nil

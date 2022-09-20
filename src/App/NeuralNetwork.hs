@@ -61,13 +61,16 @@ createDomain vSystem{vName="Dom20MHz", vPeriod=50000}
 --       hex_out = complement . toSevenSegment . elemMax <$> nn_output
 --       nn_output = neuralNetwork (pure Nothing)
 
+type LastPixelFlag = Bool
+
 neuralNetwork
   :: HiddenClockResetEnable dom
   => Signal dom (Maybe (InputAddress, NNParam))
   -> Signal dom (Vec 10 NNParam)
 neuralNetwork inputWriter = outputVec
   where
-    (state, nodeBegin) = unbundle $ register (FirstLayer (0, 0), True) (stateMachine <$> state)
+    lastPixel = (fmap fst <$> inputWriter) .==. pure (Just maxBound)
+    (state, nodeBegin) = unbundle $ register (Waiting, False) (stateMachine <$> state <*> lastPixel)
     (inpLayer, inpAddr, hiddenAddr, outAddr, weightAddr, biasAddr) = unbundle (stateToAddr <$> state)
 
     nodeBegin' = register False nodeBegin
@@ -88,24 +91,22 @@ neuralNetwork inputWriter = outputVec
     ma        = mealy mac 0 (bundle (maInput, weight, maybeBias))
 
     hiddenWriter = mux (nodeBegin' .&&. inpLayer'') (Just <$> bundle (hiddenAddr'', relu <$> ma)) (pure Nothing)
-    outputVec = mealy nodeWriter (repeat 0) (bundle (nodeBegin', inpLayer'', outAddr'', ma))
+    outputVec = mealy nodeWriter (repeat 0, repeat 0) (bundle (nodeBegin', inpLayer'', outAddr'', ma))
 
 
 weightBlob = $(memBlobTH Nothing weightsList)
 biasBlob  = $(memBlobTH Nothing biasesList)
 
-
 nodeWriter
-  :: Vec 10 NNParam
+  :: (Vec 10 NNParam, Vec 10 NNParam)
   -> (NewNodeFlag, InFirstLayer, OutputAddress, NNParam)
-  -> (Vec 10 NNParam, Vec 10 NNParam)
-nodeWriter inputVec (nodeBegin, inFirstLayer, outAddr, nodeValue)
-  | nodeBegin && not inFirstLayer
-    = (outputVec, inputVec)
-  | otherwise
-    = (inputVec, inputVec)
+  -> ((Vec 10 NNParam, Vec 10 NNParam), Vec 10 NNParam)
+nodeWriter (current, lockedOutput) (nodeBegin, inFirstLayer, outAddr, nodeValue)
+  | nodeBegin && not inFirstLayer && outAddr == maxBound = ((outputVec, outputVec), outputVec)
+  | nodeBegin && not inFirstLayer = ((outputVec, lockedOutput), lockedOutput)
+  | otherwise = ((current, lockedOutput), lockedOutput)
   where
-    outputVec = replace outAddr nodeValue inputVec
+    outputVec = replace outAddr nodeValue current
 
 -- TODO: Rewrite to record syntax
 stateToAddr
@@ -137,8 +138,9 @@ type NewNodeFlag = Bool
 
 stateMachine
   :: NetworkState         -- Current state
+  -> Bool
   -> (NetworkState, NewNodeFlag) -- (New state, new node flag)
-stateMachine state = case state of
+stateMachine state lastPixel = case state of
   FirstLayer (inp, node)
     | node == maxBound && inp == maxBound -- End of first layer
     -> (SecondLayer (0, 0), True)
@@ -153,7 +155,10 @@ stateMachine state = case state of
     -> (SecondLayer (0, succ node), True)
     | otherwise
     -> (SecondLayer (succ inp, node), False)
-  Waiting
+  Waiting 
+    | lastPixel
+    -> (FirstLayer (0,0) , True)
+    | otherwise
     -> (Waiting, False)
 
 

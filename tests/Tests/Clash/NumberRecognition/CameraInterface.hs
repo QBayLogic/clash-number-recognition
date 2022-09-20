@@ -37,22 +37,22 @@ d8mSim = out
       px <- loadPixeldata
       vs <- loadVS
       hs <- loadHS
-      return (simulate @System d8mHelper (L.zip3 px vs hs))
+      return (simulateN @System (L.length px) d8mHelper (L.zip3 px vs hs))
 
-d8mHelper (unbundle -> (a, b, c)) = d8mProcessing a b c      
+d8mHelper (unbundle -> (a, b, c)) = d8mProcessing a b c
 
 loadPixeldata :: IO [PxDataRaw]
-loadPixeldata = do 
+loadPixeldata = do
   let filepath = "tests/Tests/Clash/NumberRecognition/pixeldata.txt"
   fmap (pack . flip shiftL 2 . read @(Unsigned 10)) . lines <$> readFile filepath
 
 loadVS :: IO [VS]
-loadVS = do 
+loadVS = do
   let filepath = "tests/Tests/Clash/NumberRecognition/vs.txt"
   fmap ((> 0) . read @(Unsigned 1)) . lines <$> readFile filepath
 
 loadHS :: IO [HS]
-loadHS = do 
+loadHS = do
   let filepath = "tests/Tests/Clash/NumberRecognition/hs.txt"
   fmap ((> 0) . read @(Unsigned 1)) . lines <$> readFile filepath
 

@@ -24,7 +24,7 @@ tests =
 -- Each index of the output vector represents the 'chance' that that number
 -- is recognized in the image. These values are *not* normalized with softmax.
 neuralNetSim :: Vec 10 NNParam
-neuralNetSim = L.last $ sampleN @System 7944 (neuralNetwork (pure Nothing))
+neuralNetSim = L.last $ simulateN @System 7944 neuralNetwork (pure Nothing)
 
 nnNumber :: Index 10
 nnNumber = elemMax neuralNetSim
