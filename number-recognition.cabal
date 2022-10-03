@@ -89,8 +89,10 @@ library
     App.NumberRecognitionDemo
     App.CameraInterface
     App.NeuralNetwork
-    App.NNParamsList
-    App.InputImageVector
+    -- App.NNParamsList
+    App.VGABoundingBox
+    App.GreyBuffer
+    
   default-language: Haskell2010
 
 -- Builds the executable 'clash', with number-recognition project in scope

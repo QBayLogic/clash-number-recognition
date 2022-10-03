@@ -1,73 +1,84 @@
+{-| 
+
+-}
+
 {-# LANGUAGE FlexibleContexts #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Eta reduce" #-}
-module App.NeuralNetwork where
+
+module App.NeuralNetwork 
+  (-- * Types
+    HPixelCount
+  , InputNodes
+  , HiddenNodes
+  , OutputNodes
+  , PxVal
+  , NNParam
+  , OutputVec
+  , HexDigit
+    -- ** Address 'Index' types
+  , InputAddress
+  , HiddenLayerAddress
+  , OutputAddress
+  , WeightAddr
+  , BiasAddr
+    -- * Data types
+  , NetworkState
+    -- * Functions
+  , neuralNetwork
+  , toSevenSegment
+  , elemMax
+  )
+where
 
 import Clash.Prelude
-import Clash.Intel.ClockGen
-import Clash.Annotations.SynthesisAttributes
+import Data.Maybe (fromJust, isJust)
 
-import Data.Maybe
-import Debug.Trace
-import qualified Data.List as L
+type HPixelCount = 28
+type InputNodes = HPixelCount * HPixelCount
+type HiddenNodes = 100
+type OutputNodes = 10
 
-import App.NNParamsList (NNParam, biasesList, weightsList)
-import App.InputImageVector (inputImage)
+type WeightsLength = InputNodes * HiddenNodes + HiddenNodes * OutputNodes
+type BiasesLength = HiddenNodes + OutputNodes
 
-
-type InputAddress = Index 784
-type HiddenLayerAddress = Index 10
-type OutputAddress = Index 10
-type WeightAddr = Index 7940
-type BiasAddr = Index 20
+type InputAddress = Index InputNodes
+type HiddenLayerAddress = Index HiddenNodes
+type OutputAddress = Index OutputNodes
+type WeightAddr = Index (InputNodes * HiddenNodes + HiddenNodes * OutputNodes)
+type BiasAddr = Index (HiddenNodes + OutputNodes)
 type InFirstLayer = Bool
 
-data NetworkState = FirstLayer (InputAddress, HiddenLayerAddress)
+type PxVal = Unsigned 8
+type NNParam = SFixed 8 8
+type OutputVec = Vec OutputNodes NNParam
+type HexDigit = BitVector 7
+
+data NetworkState = FirstLayer  (InputAddress, HiddenLayerAddress)
                   | SecondLayer (HiddenLayerAddress, OutputAddress)
                   | Waiting
                   deriving (Generic, NFDataX, Show)
 
-type HexDigit = BitVector 7
 
-
--- A 50 MHz clock (period=20,000 ps)
-createDomain vSystem{vName="Dom50MHz", vPeriod=20000}
--- A 20 MHz clock (period=50,000 ps)
-createDomain vSystem{vName="Dom20MHz", vPeriod=50000}
-
-
--- {-# ANN topEntity
---   (Synthesize
---     { t_name   = "neuralNetwork"
---     , t_inputs = [ PortName "CLOCK_50"
---                  , PortName "KEY0"
---                  ]
---     , t_output = PortProduct "" [PortName "LEDR", PortName "HEX0"]
---     })#-}
-
--- topEntity
---   :: Clock Dom50MHz
---       `Annotate` 'StringAttr "chip_pin" "AF14"
---   -> Signal Dom50MHz Bool
---       `Annotate` 'StringAttr "chip_pin" "AJ4"
---   -> Signal Dom50MHz (BitVector 10, HexDigit)
--- topEntity clk rst = exposeClockResetEnable go clk (unsafeFromLowPolarity rst) enableGen
---  where
---   go :: HiddenClockResetEnable Dom50MHz
---     => Signal Dom50MHz (BitVector 10, HexDigit)
---   go = bundle (led_out, hex_out)
---     where
---       led_out = pack <$> pwm10 nn_output
---       hex_out = complement . toSevenSegment . elemMax <$> nn_output
---       nn_output = neuralNetwork (pure Nothing)
-
-type LastPixelFlag = Bool
-
+-- | Evaluate a neural network
+--
+-- Receives pixel values and their addresses. Once the last pixel is received,
+-- it starts evaluating the data to recognise the handwritten number in the 
+-- frame.
+-- 
+-- To perform the evaluation, this function needs two text files: 
+-- @weights.dat@ and @biases.dat@, both placed in the same directory as this 
+-- file. 
+-- These files contain the parameters of the pre-trained neural network. Both 
+-- files should contain newline separated values in the 'NNParam' format, 
+-- binary encoded. (e.g. for @SFixed 8 8@, the files should contain strings of
+-- 16 ones and zeros). The files should contain (at least) 'WeightsLength' and 
+-- 'BiasesLength' parameters respectively.
 neuralNetwork
   :: HiddenClockResetEnable dom
-  => Signal dom (Maybe (InputAddress, NNParam))
-  -> Signal dom (Vec 10 NNParam)
-neuralNetwork inputWriter = outputVec
+  => Signal dom (Maybe (InputAddress, PxVal))
+  -- ^ Greyscale pixel value and respective address, wrapped in Maybe
+  -> Signal dom OutputVec
+  -- ^ Vector of 10 values which can be interpreted as a \'chance\'
+neuralNetwork (fmap (fmap (fmap toNNParam)) -> inputWriter) = outputVec
   where
     lastPixel = (fmap fst <$> inputWriter) .==. pure (Just maxBound)
     (state, nodeBegin) = unbundle $ register (Waiting, False) (stateMachine <$> state <*> lastPixel)
@@ -81,28 +92,27 @@ neuralNetwork inputWriter = outputVec
     outAddr' = register 0 outAddr
     outAddr'' = register 0 outAddr'
 
-    weight    = unpack <$> blockRamBlob weightBlob weightAddr (pure Nothing)
-    bias      = unpack <$> blockRamBlob biasBlob biasAddr (pure Nothing)
+    weight    = unpack <$> romFile (SNat @WeightsLength) "src/App/weights.dat" weightAddr
+    bias      = unpack <$> romFile (SNat @BiasesLength) "src/App/biases.dat" biasAddr
     maybeBias = mux nodeBegin' (fmap Just bias) (pure Nothing)
 
-    inputVal  = blockRam inputImage inpAddr inputWriter
-    hiddenVal = blockRam (replicate d10 0) hiddenAddr hiddenWriter
+    inputVal  = blockRamU NoClearOnReset (SNat @InputNodes) (const (deepErrorX "")) inpAddr inputWriter
+    hiddenVal = blockRam (replicate (SNat @HiddenNodes) 0) hiddenAddr hiddenWriter
     maInput   = mux inpLayer' inputVal hiddenVal
     ma        = mealy mac 0 (bundle (maInput, weight, maybeBias))
 
     hiddenWriter = mux (nodeBegin' .&&. inpLayer'') (Just <$> bundle (hiddenAddr'', relu <$> ma)) (pure Nothing)
     outputVec = mealy nodeWriter (repeat 0, repeat 0) (bundle (nodeBegin', inpLayer'', outAddr'', ma))
+{-# NOINLINE neuralNetwork #-}
 
 
-weightBlob = $(memBlobTH Nothing weightsList)
-biasBlob  = $(memBlobTH Nothing biasesList)
-
+-- | Keep a locked output until a complete /Vector/ is updated
 nodeWriter
-  :: (Vec 10 NNParam, Vec 10 NNParam)
+  :: (OutputVec, OutputVec)
   -> (NewNodeFlag, InFirstLayer, OutputAddress, NNParam)
-  -> ((Vec 10 NNParam, Vec 10 NNParam), Vec 10 NNParam)
+  -> ((OutputVec, OutputVec), OutputVec)
 nodeWriter (current, lockedOutput) (nodeBegin, inFirstLayer, outAddr, nodeValue)
-  | nodeBegin && not inFirstLayer && outAddr == maxBound = ((outputVec, outputVec), outputVec)
+  | nodeBegin && not inFirstLayer && outAddr == maxBound = ((outputVec, outputVec), lockedOutput)
   | nodeBegin && not inFirstLayer = ((outputVec, lockedOutput), lockedOutput)
   | otherwise = ((current, lockedOutput), lockedOutput)
   where
@@ -120,26 +130,31 @@ stateToAddr
   )
 stateToAddr state = case state of
   FirstLayer (inp, node)
-    -> (True, inp, node, 0, wAddr, resize node)
+    -> (True, inp, node, undefinedAddrOut, wAddr, resize node)
     where
-      wAddr = resize inp + (784 * resize node)
+      wAddr = resize inp + (natToNum @InputNodes * resize node)
   SecondLayer (node, out)
-    -> (False, 0, node, out, wAddr, bAddr)
+    -> (False, undefinedAddrHidden, node, out, wAddr, bAddr)
     where
-      wAddr = resize node + (7840 + 10 * resize out)
-      bAddr = 10 + resize out
+      wAddr = resize node + (natToNum @(InputNodes * HiddenNodes) + natToNum @HiddenNodes * resize out)
+      bAddr = natToNum @HiddenNodes + resize out
   Waiting
     -> (False, 0, 0, 0, 0, 0)
---  where
---   undefinedAddr = deepErrorX "stateToAddr: address is undefined."
+ where
+  undefinedAddrOut = deepErrorX "stateToAddr: output address is undefined."
+  undefinedAddrHidden = deepErrorX "stateToAddr: hidden-layer address is undefined."
 
 
 type NewNodeFlag = Bool
+type FullFrameFlag = Bool
 
 stateMachine
-  :: NetworkState         -- Current state
-  -> Bool
-  -> (NetworkState, NewNodeFlag) -- (New state, new node flag)
+  :: NetworkState         
+  -- ^ Current state
+  -> FullFrameFlag
+  -- ^ Flag to indicate the last pixel has been received
+  -> (NetworkState, NewNodeFlag) 
+  -- ^ Bundled updated state and a flag to indicate a new node is starting
 stateMachine state lastPixel = case state of
   FirstLayer (inp, node)
     | node == maxBound && inp == maxBound -- End of first layer
@@ -155,27 +170,36 @@ stateMachine state lastPixel = case state of
     -> (SecondLayer (0, succ node), True)
     | otherwise
     -> (SecondLayer (succ inp, node), False)
-  Waiting 
+  Waiting
     | lastPixel
     -> (FirstLayer (0,0) , True)
     | otherwise
     -> (Waiting, False)
 
-
-mac :: NNParam -> (NNParam, NNParam, Maybe NNParam) -> (NNParam, NNParam)
+-- | Multiply Accumulate
+--
+-- Muliplies the two given inputs and adds them to the accumulator. Resets the 
+-- accumulator to the value inside the Just if it has one. 
+mac 
+  :: NNParam 
+  -> (NNParam, NNParam, Maybe NNParam) 
+  -> (NNParam, NNParam)
 mac acc (x, y, newAcc)
   | isJust newAcc = (ma (fromJust newAcc) x y, acc)
   | otherwise     = (ma acc x y, acc)
   where
     ma a b c = a + b * c
 
-
+-- | Rectified Linear Unit (ReLU)
+--
+-- ReLU is a non-linear activation function. It returns the maximum value between
+-- zero and the input value.
 relu :: (Num a, Ord a) => a -> a
 relu x
   | x > 0     = x
   | otherwise = 0
 
--- Replaces softmax activation to just get the index of the maximum element
+-- | Replaces softmax activation to get the index of the maximum element
 elemMax :: (KnownNat n, Num a, Ord a, 1 <= n) => Vec n a -> Index n
 elemMax = fst . ifoldr maxValIdx (0, 0)
   where
@@ -183,6 +207,7 @@ elemMax = fst . ifoldr maxValIdx (0, 0)
       | curVal > maxVal = (curIdx, curVal)
       | otherwise       = (maxIdx, maxVal)
 
+-- | Convert a decimal number to a 7-bit 'BitVector' for a 7-segment display
 toSevenSegment :: Index 10 -> HexDigit
 toSevenSegment inp = case inp of
   0  -> 0b0111111
@@ -196,3 +221,12 @@ toSevenSegment inp = case inp of
   8  -> 0b1111111
   9  -> 0b1101111
   _  -> 0b0001000
+
+-- | Map the input to [0-1) and change its type.
+--
+-- Converts an Unsigned 8 to an SFixed n 8. Although the types are not hardcoded
+-- here, it does assume PxVal is an Unsigned 8 and that NNParam is an SFixed. 
+-- The number before the decimal point is variable, but the number after the 
+-- decimal point is not.
+toNNParam :: PxVal -> NNParam
+toNNParam a = resizeF (unpack (zeroExtend (pack a)) :: SFixed 1 8)

@@ -18,7 +18,8 @@ import System.IO
 import App.CameraInterface (d8mProcessing)
 import App.NeuralNetwork (neuralNetwork)
 import App.NumberRecognitionDemo (topEntity)
-import Tests.Clash.NumberRecognition.CameraInterface (loadPixeldata, loadVS, loadHS)
+import Tests.Clash.NumberRecognition.CameraInterface 
+  (loadPixeldata, loadVS, loadHS)
 
 
 tests :: [T.TestTree]
@@ -26,7 +27,8 @@ tests =
   [
   ]
 
-testbench = onlyNew <$> nnOut
+
+testbench = onlyNew . fmap (\ (a,_,_) -> a) <$> nnOut
   where
     nnOut = do
       px <- loadPixeldata

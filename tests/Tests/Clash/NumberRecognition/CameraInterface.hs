@@ -16,8 +16,9 @@ import Debug.Trace
 import System.IO
 
 import App.CameraInterface
-import App.NeuralNetwork (InputAddress)
-import App.NNParamsList (NNParam)
+  (VS, HS, YCounter, XCounter, PxDataRaw, BayerState (IgnorePixel),
+  d8mProcessing, coordinateCounter, bayerStateMachine)
+import App.NeuralNetwork (PxVal, InputAddress)
 
 
 tests :: [T.TestTree]
@@ -26,10 +27,10 @@ tests =
   ]
 
 
-d8mSimVals :: IO [NNParam]
+d8mSimVals :: IO [PxVal]
 d8mSimVals = fmap (fmap snd) d8mSim
 
-d8mSim :: IO [(InputAddress, NNParam)]
+d8mSim :: IO [(InputAddress, PxVal)]
 d8mSim = out
   where
     out = catMaybes <$> outVal
@@ -39,7 +40,10 @@ d8mSim = out
       hs <- loadHS
       return (simulateN @System (L.length px) d8mHelper (L.zip3 px vs hs))
 
-d8mHelper (unbundle -> (a, b, c)) = d8mProcessing a b c
+d8mHelper (unbundle -> (px, vs, hs)) = d8mProcessing px' yx
+  where
+    px' = register 0 px
+    yx = mealy coordinateCounter (False, False, 0, 0) (bundle (vs, hs))
 
 loadPixeldata :: IO [PxDataRaw]
 loadPixeldata = do
@@ -59,13 +63,13 @@ loadHS = do
 
 
 -- Helper functions for testing
-yxs :: HiddenClockResetEnable dom => Signal dom (Ycounter, Xcounter)
-yxs = register (185,0) (yxCounter <$> yxs)
+yxs :: HiddenClockResetEnable dom => Signal dom (YCounter, XCounter)
+yxs = register (185,0) (yXCounter <$> yxs)
 
 outState :: HiddenClockResetEnable dom => Signal dom BayerState
 outState = register (IgnorePixel (0,0)) (bayerStateMachine <$> outState <*> yxs)
 
-simulateBayer :: Int -> [((Ycounter, Xcounter), BayerState)]
+simulateBayer :: Int -> [((YCounter, XCounter), BayerState)]
 simulateBayer n = L.zip (sampleN @System n yxs) (sampleN @System n outState)
 
 showBayerSimulation :: Int -> Int -> IO ()
@@ -76,12 +80,12 @@ showBayerSimulation n showNr = putStr (unlines (L.map show out))
 coordCntr ::
   HiddenClockResetEnable dom =>
   Signal dom (VS, HS) ->
-  Signal dom (Ycounter, Xcounter)
+  Signal dom (YCounter, XCounter)
 coordCntr inp = mealy coordinateCounter (False, False, 0, 0) inp
 
 
-yxCounter :: (Ycounter, Xcounter) -> (Ycounter, Xcounter)
-yxCounter (y,x)
+yXCounter :: (YCounter, XCounter) -> (YCounter, XCounter)
+yXCounter (y,x)
   | x == maxBound = (satSucc SatWrap y, 0)
   | otherwise     = (y, succ x)
 
@@ -99,13 +103,13 @@ syncPattern =
     <> [(True, False)]
     <> L.repeat (False, False)
 
-lastXY :: Int -> (Ycounter, Xcounter)
+lastXY :: Int -> (YCounter, XCounter)
 lastXY n = L.last $ L.take n $ simulate @System coordCntr syncPattern
 
-maxY :: [(Ycounter, Xcounter)] -> (Ycounter, Xcounter)
+maxY :: [(YCounter, XCounter)] -> (YCounter, XCounter)
 maxY a = L.maximumBy (Ord.comparing fst) a
 
-maxX :: [(Ycounter, Xcounter)] -> (Ycounter, Xcounter)
+maxX :: [(YCounter, XCounter)] -> (YCounter, XCounter)
 maxX a = L.maximumBy (Ord.comparing snd) a
 
 lastN :: Int -> [a] -> [a]
