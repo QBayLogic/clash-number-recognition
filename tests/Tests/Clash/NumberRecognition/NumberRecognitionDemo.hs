@@ -15,9 +15,9 @@ import Data.Maybe (catMaybes)
 import Debug.Trace
 import System.IO
 
-import App.CameraInterface (d8mProcessing)
-import App.NeuralNetwork (neuralNetwork)
-import App.NumberRecognitionDemo (topEntity)
+import NumberRecognition.CameraInterface (d8mProcessing)
+import NumberRecognition.NeuralNetwork (neuralNetwork)
+import NumberRecognition.NumberRecognitionDemo (topEntity)
 import Tests.Clash.NumberRecognition.CameraInterface 
   (loadPixeldata, loadVS, loadHS)
 

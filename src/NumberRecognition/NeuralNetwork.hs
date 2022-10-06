@@ -1,10 +1,17 @@
 {-| 
+  Copyright: (C) 2022, QBayLogic B.V.
+  License:   see LICENSE
 
+  The NeuralNetwork module provides functionality for evaluating a feedforward
+  neural network. The neural network is to be trained externally and the weights
+  and biases are to be exported as text files. During development, a model 
+  was trained in Python using TensorFlow. This model was able to recognise 
+  handwritten numbers and was trained using the MNIST database. 
 -}
 
 {-# LANGUAGE FlexibleContexts #-}
 
-module App.NeuralNetwork 
+module NumberRecognition.NeuralNetwork 
   (-- * Types
     HPixelCount
   , InputNodes
@@ -26,6 +33,9 @@ module App.NeuralNetwork
   , neuralNetwork
   , toSevenSegment
   , elemMax
+  , toNNParam
+  , relu
+  , mac
   )
 where
 
@@ -92,8 +102,8 @@ neuralNetwork (fmap (fmap (fmap toNNParam)) -> inputWriter) = outputVec
     outAddr' = register 0 outAddr
     outAddr'' = register 0 outAddr'
 
-    weight    = unpack <$> romFile (SNat @WeightsLength) "src/App/weights.dat" weightAddr
-    bias      = unpack <$> romFile (SNat @BiasesLength) "src/App/biases.dat" biasAddr
+    weight    = unpack <$> romFile (SNat @WeightsLength) "src/NumberRecognition/weights.dat" weightAddr
+    bias      = unpack <$> romFile (SNat @BiasesLength) "src/NumberRecognition/biases.dat" biasAddr
     maybeBias = mux nodeBegin' (fmap Just bias) (pure Nothing)
 
     inputVal  = blockRamU NoClearOnReset (SNat @InputNodes) (const (deepErrorX "")) inpAddr inputWriter

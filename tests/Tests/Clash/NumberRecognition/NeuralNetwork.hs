@@ -8,7 +8,7 @@ import qualified Test.Tasty.QuickCheck as T
 
 import qualified Data.List as L
 
-import App.NeuralNetwork
+import NumberRecognition.NeuralNetwork
   (NNParam, OutputNodes, HiddenNodes, InputNodes, neuralNetwork, elemMax)
 
 tests :: [T.TestTree]
@@ -22,7 +22,7 @@ type SimDuration = InputNodes * HiddenNodes + HiddenNodes * OutputNodes + NNDela
 -- | Simulates one iteration of the neural network. 
 -- 
 -- The input image is an image from the MNIST database and is preloaded in its 
--- BlockRam from the file "App.InputImageVector". 
+-- BlockRam from the file "NumberRecognition.InputImageVector". 
 -- The simulation needs @InputNodes * HiddenNodes@ cycles to calculate the nodes 
 -- in the hidden layer, and @HiddenNodes * OutputNodes@ for the output layer, 
 -- and has a delay of 'NNDelay'. The total simulation duration is given by 

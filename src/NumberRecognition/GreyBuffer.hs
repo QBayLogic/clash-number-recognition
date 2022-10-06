@@ -1,10 +1,25 @@
-module App.GreyBuffer where
+{-| 
+  Copyright: (C) 2022, QBayLogic B.V.
+  License:   see LICENSE
+
+  The GreyBuffer module houses a single function and its corresponding 
+  topentity. The 'greyBuffer' function stores one line greyscaled pixels. Its
+  output can then be used to overlay the these greyscaled pixels over the VGA 
+  output, thus showing what the neural network receives as an input.
+-}
+
+module NumberRecognition.GreyBuffer 
+  (
+    topEntity
+  , greyBuffer
+  )
+where
 
 import Clash.Prelude
-import App.CameraInterface (XCounter, xStart)
 import Data.Maybe (fromJust, isJust)
 
-import App.NeuralNetwork (PxVal, InputNodes, HPixelCount)
+import NumberRecognition.CameraInterface (XCounter, xStart)
+import NumberRecognition.NeuralNetwork (PxVal, InputNodes, HPixelCount)
 
 createDomain vSystem{vName="Dom25MHz", vPeriod=40000}
 

@@ -1,17 +1,20 @@
 {-| 
+  Copyright: (C) 2022, QBayLogic B.V.
+  License:   see LICENSE
+  
   This module is used to overlay part of the VGA output stream. It is to be used
   with the /DE10_STANDARD_D8M_LB_RTL/ demo by Terasic. In this demo, the 
   /OutputOverlay/ component is placed between the demo's /FOCUS_ADJ/ component
   and the ouput to the VGA monitor.
   It overlays a square on the image representing what the 
-  [neural network]("App.NeuralNetwork") \'sees\'. Inside this square, the 
+  [neural network]("NumberRecognition.NeuralNetwork") \'sees\'. Inside this square, the 
   pixels are greyscaled and downsampled, identically to how the neural network 
   receives its input. Outside the square the brightness of the RGB pixels is 
   slightly decreased, to empasize the square.
 -}
 
 
-module App.VGABoundingBox 
+module NumberRecognition.VGAOverlay
   ( -- * Types
     VCounter
   , HCounter
@@ -22,8 +25,9 @@ module App.VGABoundingBox
 where
 
 import Clash.Prelude
-import App.CameraInterface (xEnd, xStart, yEnd, yStart)
-import App.NeuralNetwork (PxVal)
+
+import NumberRecognition.CameraInterface (xEnd, xStart, yEnd, yStart)
+import NumberRecognition.NeuralNetwork (PxVal)
 
 {-|
   The DE10_STANDARD_D8M_LB_RTL demo by Terasic uses different counters for 
@@ -40,7 +44,7 @@ hOffset = 152 :: HCounter
 
 {-# ANN topEntity
     (Synthesize
-        { t_name = "OutputOverlay"
+        { t_name = "VGAOverlay"
         , t_inputs = [ PortName "Y",
                        PortName "X",
                        PortName "R",

@@ -1,8 +1,21 @@
+{-|
+  Copyright: (C) 2022, QBayLogic B.V.
+  License:   see LICENSE
+
+  The CameraInterface module provides an interface to process a given camera
+  input. For this specific application, the connected camera module is the 
+  Terasic D8M daughter board, which returns raw pixel data (10-bit) in a bayer 
+  pattern (RGGB). Besides pixel data it also ouputs a Vertical and Horizontal 
+  Sync value.
+
+  The module is used to process this raw data from the camera module such that
+  it can be used by the [neural network]("NumberRecognition.NeuralNetwork"). 
+-}
+
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_HADDOCK show-extensions, not-home #-}
 
-
-module App.CameraInterface 
+module NumberRecognition.CameraInterface 
   ( -- * Types
     XCounter
   , YCounter
@@ -19,13 +32,14 @@ module App.CameraInterface
   -- * Functions
   , d8mProcessing
   , coordinateCounter
+  , greyscale
   , bayerStateMachine
   ) 
 where
 
 import Clash.Prelude
 
-import App.NeuralNetwork (HPixelCount, InputNodes, PxVal, InputAddress)
+import NumberRecognition.NeuralNetwork (HPixelCount, InputNodes, PxVal, InputAddress)
 
 
 type XCounter = Index 640
@@ -81,7 +95,7 @@ d8mProcessing pxD yx = bundle (stateToOutputWriter <$> state <*> pxGreyInverted)
     pxD' = bitCoerce . resize . flip shiftR 2 <$> pxD
     state = register (IgnorePixel (0, 0)) (bayerStateMachine <$> state <*> yx)
 
-    lineBuffer = blockRam @dom (replicate d56 0) rdAddr writer
+    lineBuffer = blockRam @dom (replicate (SNat @(HPixelCount * 2)) 0) rdAddr writer
     lineBufferReg = register 0 lineBuffer
     pxReg = register 0 pxD'
     pxGreyInverted = xor maxBound <$> pxGrey

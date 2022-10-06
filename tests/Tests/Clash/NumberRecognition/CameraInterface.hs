@@ -15,10 +15,10 @@ import Data.Maybe (catMaybes)
 import Debug.Trace
 import System.IO
 
-import App.CameraInterface
+import NumberRecognition.CameraInterface
   (VS, HS, YCounter, XCounter, PxDataRaw, BayerState (IgnorePixel),
   d8mProcessing, coordinateCounter, bayerStateMachine)
-import App.NeuralNetwork (PxVal, InputAddress)
+import NumberRecognition.NeuralNetwork (PxVal, InputAddress)
 
 
 tests :: [T.TestTree]
@@ -47,17 +47,17 @@ d8mHelper (unbundle -> (px, vs, hs)) = d8mProcessing px' yx
 
 loadPixeldata :: IO [PxDataRaw]
 loadPixeldata = do
-  let filepath = "tests/Tests/Clash/NumberRecognition/pixeldata.txt"
+  let filepath = "tests/Tests/Clash/NumberRecognition/pixeldata.dat"
   fmap (pack . flip shiftL 2 . read @(Unsigned 10)) . lines <$> readFile filepath
 
 loadVS :: IO [VS]
 loadVS = do
-  let filepath = "tests/Tests/Clash/NumberRecognition/vs.txt"
+  let filepath = "tests/Tests/Clash/NumberRecognition/vs.dat"
   fmap ((> 0) . read @(Unsigned 1)) . lines <$> readFile filepath
 
 loadHS :: IO [HS]
 loadHS = do
-  let filepath = "tests/Tests/Clash/NumberRecognition/hs.txt"
+  let filepath = "tests/Tests/Clash/NumberRecognition/hs.dat"
   fmap ((> 0) . read @(Unsigned 1)) . lines <$> readFile filepath
 
 

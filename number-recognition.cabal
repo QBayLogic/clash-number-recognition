@@ -85,13 +85,12 @@ library
   import: common-options
   hs-source-dirs: src
   exposed-modules:
-    --Main
-    App.NumberRecognitionDemo
-    App.CameraInterface
-    App.NeuralNetwork
-    -- App.NNParamsList
-    App.VGABoundingBox
-    App.GreyBuffer
+    -- NumberRecognition
+    NumberRecognition.NumberRecognitionDemo
+    NumberRecognition.CameraInterface
+    NumberRecognition.NeuralNetwork
+    NumberRecognition.VGAOverlay
+    NumberRecognition.GreyBuffer
     
   default-language: Haskell2010
 
