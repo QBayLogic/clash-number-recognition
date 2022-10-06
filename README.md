@@ -44,13 +44,13 @@ Clash as `SFixed 8 8`. For more information on the model, see
   - Used demo: `DE1_SOC_D8M_LB_RTL` by Terasic
   - Modified to work on `DE10-Standard` (unsure of modifications, request source 
   code from developers)
-  - Add all Verilog (`*.v`) files to the project
+  - Add all generated Verilog (`*.v`) files to the project
   - Create 3 new components in the projects topEntity (`DE10_STANDARD_D8M_LB_RTL.v`):
       * NumberRecognitionDemo
       * GreyBuffer
       * OutputOverlay
-  - Connect the components to the existing components in the demo (*TODO: add 
-  diagram*)
+  - Connect the components to the existing components in the demo (see 
+  [Component overview](Diagrams/Component_overview.pdf))
 ## Synthesise the design
 Synthesise the design with your prefered synthesis tool. Since this project
 targets a Cyclone V, Quartus was used during development.
