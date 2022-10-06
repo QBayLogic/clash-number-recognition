@@ -26,7 +26,11 @@ tests =
   [
   ]
 
-
+-- | Perform the image preprocessing based on generated input
+--
+-- Loads Pixel data and Vertical and Horizontal Sync values from the 3 text 
+-- files (generated externally). These 3 files represent a simulated input 
+-- from the D8M camera module. 
 d8mSimVals :: IO [PxVal]
 d8mSimVals = fmap (fmap snd) d8mSim
 
