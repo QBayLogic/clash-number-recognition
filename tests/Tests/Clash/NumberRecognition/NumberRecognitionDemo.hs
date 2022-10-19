@@ -35,7 +35,7 @@ tests =
 -- be shown on a 7-segment display. The output of this function should show
 -- the number(s) detected in the pixel stream.
 testbench :: IO [Index 10]
-testbench = fmap (fmap (fromSevenSegment . complement)) $ onlyNew . fmap (\ (a,_,_) -> a) <$> nnOut
+testbench = fmap (fmap (fromSevenSegment . complement)) $ onlyNew . fmap (\ ((a,_),_,_) -> a) <$> nnOut
   where
     nnOut = do
       px <- loadPixeldata

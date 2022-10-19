@@ -46,6 +46,8 @@ import NumberRecognition.NNConfig
   ( InputNodes
   , HiddenNodes
   , OutputNodes
+  , WeightType
+  , BiasType
   )
 
 type WeightsLength = InputNodes * HiddenNodes + HiddenNodes * OutputNodes
@@ -89,7 +91,7 @@ biasPath = "src/NumberRecognition/biases.dat"
 -- 16 ones and zeros). The files should contain (at least) 'WeightsLength' and 
 -- 'BiasesLength' parameters respectively.
 neuralNetwork
-  :: HiddenClockResetEnable dom
+  :: forall dom . HiddenClockResetEnable dom
   => Signal dom (Maybe (InputAddress, PxVal))
   -- ^ Greyscale pixel value and respective address, wrapped in Maybe
   -> Signal dom OutputVec
@@ -108,8 +110,16 @@ neuralNetwork (fmap (fmap (fmap toNNParam)) -> inputWriter) = outputVec
     outAddr' = register 0 outAddr
     outAddr'' = register 0 outAddr'
 
-    weight    = unpack <$> romFile (SNat @WeightsLength) "src/NumberRecognition/weights.dat" weightAddr
-    bias      = unpack <$> romFile (SNat @BiasesLength) "src/NumberRecognition/biases.dat" biasAddr
+    weight :: Signal dom NNParam
+    weight = resizeF <$> weightRom
+      where
+        weightRom :: Signal dom WeightType
+        weightRom = unpack <$> romFile (SNat @WeightsLength) weightPath weightAddr
+    bias :: Signal dom NNParam
+    bias      = resizeF <$> biasRom
+      where
+        biasRom :: Signal dom BiasType
+        biasRom = unpack <$> romFile (SNat @BiasesLength) biasPath biasAddr
     maybeBias = mux nodeBegin' (fmap Just bias) (pure Nothing)
 
     inputVal  = blockRamU NoClearOnReset (SNat @InputNodes) (const (deepErrorX "")) inpAddr inputWriter

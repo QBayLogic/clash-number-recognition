@@ -8,8 +8,16 @@ import qualified Test.Tasty.QuickCheck as T
 
 import qualified Data.List as L
 
+import NumberRecognition.NNConfig 
+  ( InputNodes
+  , HiddenNodes
+  , OutputNodes
+  )
 import NumberRecognition.NeuralNetwork
-  (NNParam, OutputNodes, HiddenNodes, InputNodes, neuralNetwork, elemMax)
+  ( NNParam
+  , neuralNetwork
+  , elemMax
+  )
 
 tests :: [T.TestTree]
 tests =
