@@ -21,8 +21,8 @@ import Clash.Prelude
 import Clash.Annotations.SynthesisAttributes
 
 
-import NumberRecognition.NeuralNetwork (InputAddress, PxVal, OutputVec, HexDigit, 
-  neuralNetwork, toSevenSegment, elemMax)
+import NumberRecognition.NeuralNetwork (InputAddress, PxVal, OutputVec, HexDigit,
+  neuralNetwork, toSevenSegment, elemMax, OutputNodes)
 import NumberRecognition.CameraInterface (PxDataRaw, VS, HS, YCounter, XCounter, 
   d8mProcessing, coordinateCounter)
 
@@ -41,7 +41,10 @@ createDomain vSystem{vName="Dom25MHz", vPeriod=40000}
                      , PortName "HSYNC"
                      ]
         , t_output = PortProduct "" [
-                      PortName "HEX0",
+                      PortProduct "" [
+                        PortName "HEX",
+                        PortName "Number"
+                      ],
                       PortName "WriteGrey",
                       PortProduct "" [
                         PortName "YCount",
@@ -63,7 +66,7 @@ topEntity
   -- ^ Vertical Sync
   -> Signal Dom25MHz HS
   -- ^ Horizontal Sync
-  -> Signal Dom25MHz (HexDigit, Maybe (InputAddress, PxVal), (YCounter, XCounter))
+  -> Signal Dom25MHz ((HexDigit, Index OutputNodes), Maybe (InputAddress, PxVal), (YCounter, XCounter))
   -- ^ BitVector for 7-segment display, preprocessing output, pixel coordinates
 topEntity clk rst pxd vs hs = bundle
   ( exposeClockResetEnable go clk reset enableGen
@@ -72,7 +75,7 @@ topEntity clk rst pxd vs hs = bundle
   )
   where
     go :: HiddenClockResetEnable Dom25MHz
-       => Signal Dom25MHz HexDigit
+       => Signal Dom25MHz (HexDigit, Index OutputNodes)
     go = displayHex <$> neuralNetwork preProcessed
     -- TODO: Add delay to Pixel value pxd
     -- pxd' = register 0 pxd
@@ -84,6 +87,9 @@ topEntity clk rst pxd vs hs = bundle
 
 -- | Extract the index of the largest element and convert to a 'BitVector' to
 -- show on a 7-segment display
-displayHex :: OutputVec -> HexDigit
-displayHex = complement . toSevenSegment . elemMax
+displayHex :: OutputVec -> (HexDigit, Index OutputNodes)
+displayHex inp = (hex nr, nr)
+  where
+    nr = elemMax inp
+    hex = complement . toSevenSegment 
 {-# NOINLINE displayHex #-}

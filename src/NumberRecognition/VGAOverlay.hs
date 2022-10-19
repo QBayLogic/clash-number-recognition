@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-| 
   Copyright: (C) 2022, QBayLogic B.V.
   License:   see LICENSE
@@ -21,6 +22,7 @@ module NumberRecognition.VGAOverlay
   -- * Functions
   , topEntity
   , outputOverlay
+  , numberOverlay
   )
 where
 
@@ -28,6 +30,7 @@ import Clash.Prelude
 
 import NumberRecognition.CameraInterface (xEnd, xStart, yEnd, yStart)
 import NumberRecognition.NeuralNetwork (PxVal)
+import NumberRecognition.NumberLookup (NumHeight, NumWidth, numLUT)
 
 {-|
   The DE10_STANDARD_D8M_LB_RTL demo by Terasic uses different counters for 
@@ -36,11 +39,16 @@ import NumberRecognition.NeuralNetwork (PxVal)
   'YCounter' and 'XCounter' used in this Clash project. Since the VGA component
   from the demo is used, these two counters are needed for the VGA overlay.
 -}
-type VCounter = Index 526
-type HCounter = Index 793
 
-vOffset = 45 :: VCounter
-hOffset = 152 :: HCounter
+type VSyncTotal = 526
+type HSyncTotal = 793
+type VOffset = 45
+type HOffset = 152
+
+type VCounter = Index VSyncTotal
+type HCounter = Index HSyncTotal
+
+
 
 {-# ANN topEntity
     (Synthesize
@@ -50,7 +58,8 @@ hOffset = 152 :: HCounter
                        PortName "R",
                        PortName "G",
                        PortName "B",
-                       PortName "Grey"
+                       PortName "Grey",
+                       PortName "Number"
                      ]
         , t_output = PortProduct "" [ PortName "outR"
                       , PortName "outG"
@@ -58,22 +67,27 @@ hOffset = 152 :: HCounter
                       ]
         })#-}
 
-topEntity 
-  :: VCounter 
+topEntity
+  :: VCounter
   -- ^ Vertical position of output pixel
-  -> HCounter 
+  -> HCounter
   -- ^ Horizontal position of output pixel
-  -> PxVal 
+  -> PxVal
   -- ^ Red pixel value
-  -> PxVal 
+  -> PxVal
   -- ^ Green pixel value
-  -> PxVal 
+  -> PxVal
   -- ^ Blue pixel value
-  -> PxVal 
-  -- ^ Greyscaled pixel value
+  -> PxVal
+  -- -- ^ Greyscaled pixel value
+  -> Index 10
+  -- ^ Detected number
   -> (PxVal, PxVal, PxVal)
   -- ^ RGB pixel values
-topEntity = outputOverlay
+topEntity v h r g b grey number = numberOverlay v h r' g' b' number
+  where
+    (r', g', b') = outputOverlay v h r g b grey
+
 
 
 -- | Replace the RGB values with its corresponding greyscaled value in the 
@@ -82,26 +96,77 @@ topEntity = outputOverlay
 -- Decreases the brightness of the RGB pixels outside the neural networks input
 -- box, and shows this box as the greyscaled and downscaled view which the 
 -- network receives as its input.
-outputOverlay 
-  :: VCounter 
+outputOverlay
+  :: VCounter
   -- ^ Vertical position of output pixel
-  -> HCounter 
+  -> HCounter
   -- ^ Horizontal position of output pixel
-  -> PxVal 
+  -> PxVal
   -- ^ Red pixel value
-  -> PxVal 
+  -> PxVal
   -- ^ Green pixel value
-  -> PxVal 
+  -> PxVal
   -- ^ Blue pixel value
-  -> PxVal 
+  -> PxVal
   -- ^ Greyscaled pixel value
   -> (PxVal, PxVal, PxVal)
   -- ^ RGB pixel values
 outputOverlay vCount hCount r g b grey
-  | inFrame =   (grey,grey,grey)
+  | inFrame   = (grey, grey, grey)
   | otherwise = (shiftR r 1, shiftR g 1, shiftR b 1)
  where
   inFrame =
-    hCount >= (resize xStart + hOffset) && hCount < (resize xEnd + hOffset) &&
-    vCount >= (resize yStart + vOffset) && vCount < (resize yEnd + vOffset)
+    hCount >= (resize xStart + (natToNum @HOffset)) &&
+    hCount < (resize xEnd + (natToNum @HOffset)) &&
+    vCount >= (resize yStart + (natToNum @VOffset)) &&
+    vCount < (resize yEnd + (natToNum @VOffset))
 {-# NOINLINE outputOverlay #-}
+
+
+type OverlayAddr = Index (NumHeight * 10)
+type Scaling = 4  -- Must be power of 2
+type YOverlayStart = VSyncTotal - NumHeight * Scaling
+type XOverlayStart = HSyncTotal - NumWidth * Scaling
+
+
+numberOverlay
+  :: VCounter
+  -- ^ Vertical position of output pixel
+  -> HCounter
+  -- ^ Horizontal position of output pixel
+  -> PxVal
+  -- ^ Red pixel value
+  -> PxVal
+  -- ^ Green pixel value
+  -> PxVal
+  -- ^ Blue pixel value
+  -> Index 10
+  -- ^ Detected number
+  -> (PxVal, PxVal, PxVal)
+  -- ^ RGB pixel values
+numberOverlay vCount hCount r g b number
+  | inFrame   = (out, out, out)
+  | otherwise = (r, g, b)
+  where
+    inFrame = inFrameY && inFrameX
+      where
+        inFrameY =  vCount >= natToNum @YOverlayStart && 
+                    vCount <  natToNum @(YOverlayStart + NumHeight * Scaling)
+        inFrameX =  hCount >= natToNum @XOverlayStart && 
+                    hCount <  natToNum @(XOverlayStart + NumWidth * Scaling)
+    y = satSub SatBound vCount (natToNum @YOverlayStart)
+    x = satSub SatBound hCount (natToNum @XOverlayStart)
+
+    readAddr :: OverlayAddr
+    readAddr = resize number `shiftL` (natToNum @(CLog 2 NumHeight)) + resize y'
+      where
+        y' :: Index NumHeight
+        y'  = resize . flip shiftR (natToNum @(CLog 2 Scaling)) $ y
+
+    bitAddr :: Index NumWidth
+    bitAddr = resize . flip shiftR (natToNum @(CLog 2 Scaling)) $ x
+
+    overlay = numLUT !! readAddr
+    active = bitToBool (overlay ! bitAddr)
+    out = if active then maxBound else minBound
+{-# NOINLINE numberOverlay #-}
