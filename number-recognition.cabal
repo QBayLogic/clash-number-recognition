@@ -89,6 +89,7 @@ library
     NumberRecognition.NumberRecognitionDemo
     NumberRecognition.CameraInterface
     NumberRecognition.NeuralNetwork
+    NumberRecognition.NNConfig
     NumberRecognition.VGAOverlay
     NumberRecognition.GreyBuffer
     NumberRecognition.NumberLookup

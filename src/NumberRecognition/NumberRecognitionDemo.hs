@@ -21,10 +21,25 @@ import Clash.Prelude
 import Clash.Annotations.SynthesisAttributes
 
 
-import NumberRecognition.NeuralNetwork (InputAddress, PxVal, OutputVec, HexDigit,
-  neuralNetwork, toSevenSegment, elemMax, OutputNodes)
-import NumberRecognition.CameraInterface (PxDataRaw, VS, HS, YCounter, XCounter, 
-  d8mProcessing, coordinateCounter)
+import NumberRecognition.NNConfig (OutputNodes)
+import NumberRecognition.NeuralNetwork 
+  ( InputAddress
+  , PxVal
+  , OutputVec
+  , HexDigit
+  , neuralNetwork
+  , toSevenSegment
+  , elemMax
+  )
+import NumberRecognition.CameraInterface 
+  ( PxDataRaw
+  , VS
+  , HS
+  , YCounter
+  , XCounter
+  , d8mProcessing
+  , coordinateCounter
+  )
 
 
 -- | A 25 MHz clock domain (period=40,000 ps)

@@ -39,7 +39,8 @@ where
 
 import Clash.Prelude
 
-import NumberRecognition.NeuralNetwork (HPixelCount, InputNodes, PxVal, InputAddress)
+import NumberRecognition.NeuralNetwork (PxVal, InputAddress)
+import NumberRecognition.NNConfig (HPixelCount)
 
 
 type XCounter = Index 640

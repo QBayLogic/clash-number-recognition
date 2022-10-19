@@ -13,11 +13,11 @@
 
 module NumberRecognition.NeuralNetwork 
   (-- * Types
-    HPixelCount
-  , InputNodes
-  , HiddenNodes
-  , OutputNodes
-  , PxVal
+    -- HPixelCount
+  -- , InputNodes
+  -- , HiddenNodes
+  -- , OutputNodes
+    PxVal
   , NNParam
   , OutputVec
   , HexDigit
@@ -42,10 +42,11 @@ where
 import Clash.Prelude
 import Data.Maybe (fromJust, isJust)
 
-type HPixelCount = 28
-type InputNodes = HPixelCount * HPixelCount
-type HiddenNodes = 100
-type OutputNodes = 10
+import NumberRecognition.NNConfig 
+  ( InputNodes
+  , HiddenNodes
+  , OutputNodes
+  )
 
 type WeightsLength = InputNodes * HiddenNodes + HiddenNodes * OutputNodes
 type BiasesLength = HiddenNodes + OutputNodes
@@ -66,6 +67,11 @@ data NetworkState = FirstLayer  (InputAddress, HiddenLayerAddress)
                   | SecondLayer (HiddenLayerAddress, OutputAddress)
                   | Waiting
                   deriving (Generic, NFDataX, Show)
+
+weightPath :: [Char]
+weightPath = "src/NumberRecognition/weights.dat"
+biasPath :: [Char]
+biasPath = "src/NumberRecognition/biases.dat"
 
 
 -- | Evaluate a neural network
@@ -114,7 +120,6 @@ neuralNetwork (fmap (fmap (fmap toNNParam)) -> inputWriter) = outputVec
     hiddenWriter = mux (nodeBegin' .&&. inpLayer'') (Just <$> bundle (hiddenAddr'', relu <$> ma)) (pure Nothing)
     outputVec = mealy nodeWriter (repeat 0, repeat 0) (bundle (nodeBegin', inpLayer'', outAddr'', ma))
 {-# NOINLINE neuralNetwork #-}
-
 
 -- | Keep a locked output until a complete /Vector/ is updated
 nodeWriter

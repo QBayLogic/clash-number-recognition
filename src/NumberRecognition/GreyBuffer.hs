@@ -19,7 +19,8 @@ import Clash.Prelude
 import Data.Maybe (fromJust, isJust)
 
 import NumberRecognition.CameraInterface (XCounter, xStart)
-import NumberRecognition.NeuralNetwork (PxVal, InputNodes, HPixelCount)
+import NumberRecognition.NeuralNetwork (PxVal)
+import NumberRecognition.NNConfig (HPixelCount, InputNodes)
 
 createDomain vSystem{vName="Dom25MHz", vPeriod=40000}
 
