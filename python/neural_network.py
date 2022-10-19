@@ -1,25 +1,63 @@
+import math
 import os
 import tensorflow as tf
 import numpy as np
 from fxpmath import Fxp
 
-# Constants which define the shape of the neural network
+
 input_shape = (28, 28)
 input_nodes = np.prod(input_shape)
 hidden_nodes = 100
 output_nodes = 10
 
 
-def write_params_memfile(x1, x2, name: str):
-    """Write the given parameters to a file"""
+def write_params_memfile(x1, x2, name: str, dtype=None):
+    """Write the given biases to a file"""
+    if dtype == None:
+        xmax = np.max((np.abs(x1).max(), np.abs(x2).max()))
+        high_bits = math.ceil(math.log(xmax, 2)) + 1
+        dtype = f"S{high_bits}.8"
+    print(f"{name} is formatted as: {dtype}")
+
     xs = np.concatenate((x1.flatten('F'), x2.flatten('F')), axis=0)
-    x_str = "\n".join(f"{Fxp(x, dtype='S8.8').bin()}" for x in xs)
+    x_str = "\n".join(f"{Fxp(x, dtype=dtype).bin()}" for x in xs)
     fp = f"nn_params/{name}.dat"
     f = open(fp, 'w')
     f.write(x_str)
     f.close()
     print(f"Wrote {name} to {fp}")
-        
+    return dtype
+
+
+def write_config(wtype, btype):
+    """Generate a Haskell file with configuration data"""
+    s = (
+        f""
+    )
+
+    s = (
+        "module NumberRecognition.NNConfig where\n\n"
+        "import Clash.Prelude\n\n"
+    )
+    s += (
+        "-- Nodes per layer in the neural network\n"
+        f"type HPixelCount = {input_shape[0]}\n"
+        f"type InputNodes  = {np.prod(input_shape)}\n"
+        f"type HiddenNodes = {hidden_nodes}\n"
+        f"type OutputNodes = {output_nodes}\n\n"
+    )
+    w_int, w_frac = wtype[1:].split('.')
+    b_int, b_frac = btype[1:].split('.')
+    s += (
+        "-- Types of the weights and biases parameters (binary encoded in .dat)\n"
+        f"type WeightType = SFixed {w_int} {w_frac}\n"
+        f"type BiasType   = SFixed {b_int} {b_frac}\n"
+    )
+    filepath = f"nn_params/NNConfig.hs"
+    f = open(filepath, 'w')
+    f.write(s)
+    f.close()
+    print(f"Wrote neural network configuration to {filepath}")
 
 
 def evaluate_image(img):
@@ -100,8 +138,10 @@ except AttributeError:
 
 # Write the parameters to a file
 w1, b1, w2, b2 = model.get_weights()
-write_params_memfile(w1, w2, "weights")
-write_params_memfile(b1, b2, "biases")
+weights_dtype = write_params_memfile(w1, w2, "weights")
+biases_dtype = write_params_memfile(b1, b2, "biases")
+
+write_config(weights_dtype, biases_dtype)
 
 # Test the model on an input other than the MNIST testing set, e.g. data aquired
 # using Quartus Signal Tap.
@@ -120,7 +160,7 @@ write_params_memfile(b1, b2, "biases")
 
 #     print(f"{label}\t{ref_out.argmax()}\t{reconstr_out.argmax()}\t{threshold_out.argmax()}")
 
-    # print(f"\nFor input image which shows the number {label}:")
-    # # print(f"\nHidden layer nodes:\n{np.array2string(h.astype(np.float32), separator=', ')}")
-    # print(f"Output:\n{np.array2string(o.astype(np.float32), separator=', ')}")
-    # print(f"Detected number : {o.argmax()}")
+# print(f"\nFor input image which shows the number {label}:")
+# # print(f"\nHidden layer nodes:\n{np.array2string(h.astype(np.float32), separator=', ')}")
+# print(f"Output:\n{np.array2string(o.astype(np.float32), separator=', ')}")
+# print(f"Detected number : {o.argmax()}")
