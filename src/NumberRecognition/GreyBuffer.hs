@@ -8,7 +8,7 @@
   output, thus showing what the neural network receives as an input.
 -}
 
-module NumberRecognition.GreyBuffer 
+module NumberRecognition.GreyBuffer
   (
     topEntity
   , greyBuffer
@@ -36,14 +36,14 @@ createDomain vSystem{vName="Dom25MHz", vPeriod=40000}
         , t_output = PortName "outGrey"
         })#-}
 
-topEntity 
-  :: Clock Dom25MHz 
+topEntity
+  :: Clock Dom25MHz
   -- ^ Clock
-  -> Signal Dom25MHz Bool 
+  -> Signal Dom25MHz Bool
   -- ^ Reset
-  -> Signal Dom25MHz XCounter 
+  -> Signal Dom25MHz XCounter
   -- ^ Horizontal counter
-  -> Signal Dom25MHz (Maybe (Index InputNodes, PxVal)) 
+  -> Signal Dom25MHz (Maybe (Index InputNodes, PxVal))
   -- ^ Write address and value of the linebuffer
   -> Signal Dom25MHz PxVal
   -- ^ Pixel value from linebuffer at the given X coordinate
@@ -55,8 +55,8 @@ topEntity clk rst =
 -- 
 -- Writes given pixel values to the next place in the linebuffer. The returned
 -- pixel value corresponds with the pixel on the output location on the screen.
-greyBuffer ::
-  HiddenClockResetEnable dom
+greyBuffer
+  :: forall dom . HiddenClockResetEnable dom
   => Signal dom XCounter
   -- ^ Horizontal counter
   -> Signal dom (Maybe (Index InputNodes, PxVal))
@@ -67,7 +67,7 @@ greyBuffer xCount writeGrey = bundle readGrey
  where
   readGrey = blockRamU NoClearOnReset (SNat @HPixelCount) (const (deepErrorX "")) readAddr writeOp
 
-  readAddr = (\x -> resize ((`shiftR` 2) (satSub SatError x (natToNum @XStart)))) <$> xCount
+  readAddr = resize . (`shiftR` 2) . (\x -> satSub SatError x (natToNum @XStart)) <$> xCount
   writeAddr = register (0 :: Index HPixelCount) writeAddr'
   writeAddr' = mux (isJust <$> writeGrey) (satSucc SatWrap <$> writeAddr) writeAddr
   writeOp = mux
