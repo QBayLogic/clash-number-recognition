@@ -28,7 +28,7 @@ where
 
 import Clash.Prelude
 
-import NumberRecognition.CameraInterface (xEnd, xStart, yEnd, yStart)
+import NumberRecognition.CameraInterface (XStart, YStart, Size)
 import NumberRecognition.NeuralNetwork (PxVal)
 import NumberRecognition.NumberLookup (NumHeight, NumWidth, numLUT)
 
@@ -116,10 +116,10 @@ outputOverlay vCount hCount r g b grey
   | otherwise = (shiftR r 1, shiftR g 1, shiftR b 1)
  where
   inFrame =
-    hCount >= (resize xStart + (natToNum @HOffset)) &&
-    hCount < (resize xEnd + (natToNum @HOffset)) &&
-    vCount >= (resize yStart + (natToNum @VOffset)) &&
-    vCount < (resize yEnd + (natToNum @VOffset))
+    hCount >= (natToNum @(XStart + HOffset)) &&
+    hCount < (natToNum @(XStart + Size + HOffset)) &&
+    vCount >= (natToNum @(YStart + VOffset)) &&
+    vCount < (natToNum @(YStart + Size + VOffset))
 {-# NOINLINE outputOverlay #-}
 
 
@@ -154,8 +154,8 @@ numberOverlay vCount hCount r g b number
                     vCount <  natToNum @(YOverlayStart + NumHeight * Scaling)
         inFrameX =  hCount >= natToNum @XOverlayStart && 
                     hCount <  natToNum @(XOverlayStart + NumWidth * Scaling)
-    y = satSub SatBound vCount (natToNum @YOverlayStart)
-    x = satSub SatBound hCount (natToNum @XOverlayStart)
+    y = satSub SatError vCount (natToNum @YOverlayStart)
+    x = satSub SatError hCount (natToNum @XOverlayStart)
 
     readAddr :: OverlayAddr
     readAddr = resize number `shiftL` (natToNum @(CLog 2 NumHeight)) + resize y'

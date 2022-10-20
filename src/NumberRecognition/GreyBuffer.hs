@@ -18,7 +18,7 @@ where
 import Clash.Prelude
 import Data.Maybe (fromJust, isJust)
 
-import NumberRecognition.CameraInterface (XCounter, xStart)
+import NumberRecognition.CameraInterface (XCounter, XStart)
 import NumberRecognition.NeuralNetwork (PxVal)
 import NumberRecognition.NNConfig (HPixelCount, InputNodes)
 
@@ -67,7 +67,7 @@ greyBuffer xCount writeGrey = bundle readGrey
  where
   readGrey = blockRamU NoClearOnReset (SNat @HPixelCount) (const (deepErrorX "")) readAddr writeOp
 
-  readAddr = (\x -> bitCoerce $ resize ((`shiftR` 2) (satSub SatError x xStart))) <$> xCount
+  readAddr = (\x -> resize ((`shiftR` 2) (satSub SatError x (natToNum @XStart)))) <$> xCount
   writeAddr = register (0 :: Index HPixelCount) writeAddr'
   writeAddr' = mux (isJust <$> writeGrey) (satSucc SatWrap <$> writeAddr) writeAddr
   writeOp = mux

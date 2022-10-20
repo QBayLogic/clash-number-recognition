@@ -13,10 +13,6 @@
 
 module NumberRecognition.NeuralNetwork 
   (-- * Types
-    -- HPixelCount
-  -- , InputNodes
-  -- , HiddenNodes
-  -- , OutputNodes
     PxVal
   , NNParam
   , OutputVec
@@ -25,8 +21,8 @@ module NumberRecognition.NeuralNetwork
   , InputAddress
   , HiddenLayerAddress
   , OutputAddress
-  , WeightAddr
-  , BiasAddr
+  , WeightAddress
+  , BiasAddress
     -- * Data types
   , NetworkState
     -- * Functions
@@ -56,8 +52,8 @@ type BiasesLength = HiddenNodes + OutputNodes
 type InputAddress = Index InputNodes
 type HiddenLayerAddress = Index HiddenNodes
 type OutputAddress = Index OutputNodes
-type WeightAddr = Index (InputNodes * HiddenNodes + HiddenNodes * OutputNodes)
-type BiasAddr = Index (HiddenNodes + OutputNodes)
+type WeightAddress = Index (InputNodes * HiddenNodes + HiddenNodes * OutputNodes)
+type BiasAddress = Index (HiddenNodes + OutputNodes)
 type InFirstLayer = Bool
 
 type PxVal = Unsigned 8
@@ -150,8 +146,8 @@ stateToAddr
       InputAddress,
       HiddenLayerAddress,
       OutputAddress,
-      WeightAddr,
-      BiasAddr
+      WeightAddress,
+      BiasAddress
   )
 stateToAddr state = case state of
   FirstLayer (inp, node)

@@ -15,26 +15,24 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_HADDOCK show-extensions, not-home #-}
 
-module NumberRecognition.CameraInterface 
+module NumberRecognition.CameraInterface
   ( -- * Types
     XCounter
   , YCounter
   , PxDataRaw
   , HS
   , VS
+  , XStart
+  , YStart
+  , Size
     -- * Data types
   , BayerState (IgnorePixel)
-    -- * Constants
-  , xStart
-  , xEnd
-  , yStart
-  , yEnd
   -- * Functions
   , d8mProcessing
   , coordinateCounter
   , greyscale
   , bayerStateMachine
-  ) 
+  )
 where
 
 import Clash.Prelude
@@ -43,24 +41,23 @@ import NumberRecognition.NeuralNetwork (PxVal, InputAddress)
 import NumberRecognition.NNConfig (HPixelCount)
 
 
-type XCounter = Index 640
-type YCounter = Index 480
-type PxDataRaw = BitVector 10
+type HResolution = 640
+type VResolution = 480
 
+type YCounter = Index VResolution
+type XCounter = Index HResolution
+type PxDataRaw = BitVector 10
 
 type VS = Bool
 type HS = Bool
 type SyncState = (VS, HS, YCounter, XCounter)
 
-
 type LineBufferAddress = Index (HPixelCount * 2)
-type SIZE = HPixelCount * 4
+type Scaling = 4
+type Size = HPixelCount * Scaling
 
-
-xStart = (maxBound - (natToNum @SIZE) + 1) `div` 2 :: XCounter  -- (640-112)/2
-xEnd   = xStart + (natToNum @SIZE) :: XCounter
-yStart = (maxBound - (natToNum @SIZE) + 1) `div` 2 :: YCounter  -- (480-112)/2
-yEnd   = yStart + (natToNum @SIZE) :: YCounter
+type XStart = (HResolution - Size) `Div` 2
+type YStart = (VResolution - Size) `Div` 2
 
 {-|
   The 'BayerState' data type contains 7 states. Each has an input address and
@@ -114,8 +111,8 @@ d8mProcessing pxD yx = bundle (stateToOutputWriter <$> state <*> pxGreyInverted)
 -- >   R G
 -- >   G B
 -- 
-greyscale 
-  :: (PxVal, PxVal, PxVal, PxVal) 
+greyscale
+  :: (PxVal, PxVal, PxVal, PxVal)
   -- ^ Pixel values in order: Red, Green, Green, Blue
   -> PxVal
   -- ^ Greyscaled pixel value
@@ -139,11 +136,11 @@ bayerStateMachine state (y, x) = newState
   where
     newState = case state of
       IgnorePixel (outAddr, wrAddr)
-        | yInFrame && xInFrame && lsby == 0b01 && lsbx == 0b00
+        | inFrameY && inFrameX && lsby == 0b01 && lsbx == 0b00
         -> StoreRed (outAddr, wrAddr)
-        | (yStart <= y && y < yEnd) && lsby == 0b10
+        | inFrameY && lsby == 0b10
         -> IgnorePixelEven (outAddr, 0)
-        | y >= yEnd
+        | y >= natToNum @(YStart + Size)
         -> IgnorePixel (0, 0)
         | otherwise
         -> state
@@ -152,7 +149,7 @@ bayerStateMachine state (y, x) = newState
       StoreGreen (outAddr, wrAddr)
         -> IgnorePixel (outAddr, satSucc SatBound wrAddr)
       IgnorePixelEven (outAddr, rdAddr)
-        | xInFrame && lsbx == 0b11
+        | inFrameX && lsbx == 0b11
         -> LoadRed (outAddr, rdAddr)
         | lsby /= 0b10
         -> IgnorePixel (outAddr, 0)
@@ -167,17 +164,17 @@ bayerStateMachine state (y, x) = newState
       where
         lsby = resize (pack y) :: BitVector 2
         lsbx = resize (pack x) :: BitVector 2
-        yInFrame = y >= yStart && y < yEnd
-        xInFrame = x >= xStart && x < xEnd
+        inFrameY = y >= natToNum @YStart && y < natToNum @(YStart + Size)
+        inFrameX = x >= natToNum @XStart && x < natToNum @(XStart + Size)
 
 -- | Derive an X and Y coordinate from the given Horizontal and Vertical Sync
 --
 -- Vertical Sync is high during an entire frame. Horizontal sync is only high
 -- while the camera module outputs a horizontal line of the frame.
 coordinateCounter
-  :: SyncState 
+  :: SyncState
   -- ^ Current state (last VSync, HSync, Y and X values)
-  -> (VS, HS) 
+  -> (VS, HS)
   -- ^ Current Vertical and Horizontal Sync
   -> (SyncState, (YCounter, XCounter))
   -- ^ Updated state and coordinates of input pixel
@@ -195,8 +192,8 @@ coordinateCounter (pre_vs, pre_hs, y, x) (vs, hs) = ((vs, hs, y', x'), (y, x))
 -- 
 -- Only extract the address in states where the the linebuffer should be read. 
 -- Returns an error when an address is requested while not in a reading state.
-stateToReadAddress 
-  :: BayerState 
+stateToReadAddress
+  :: BayerState
   -- ^ Current state
   -> LineBufferAddress
   -- ^ Read address extracted from state
@@ -208,10 +205,10 @@ stateToReadAddress s = case s of
   _ -> deepErrorX "stateToReadAddress: read address requested while not in reading state."
 
 -- | Create a Just value for writing to a BlockRam
-stateToWriter 
-  :: BayerState 
+stateToWriter
+  :: BayerState
   -- ^ Current state
-  -> PxVal 
+  -> PxVal
   -- ^ RGGB pixel value
   -> Maybe (LineBufferAddress, PxVal)
   -- ^ Just address and value when in a writer state, Nothing otherwise
@@ -221,10 +218,10 @@ stateToWriter s p = case s of
   _ -> Nothing
 
 -- | Create a Just value for writing to the output
-stateToOutputWriter 
-  :: BayerState 
+stateToOutputWriter
+  :: BayerState
   -- ^ Current state
-  -> PxVal 
+  -> PxVal
   -- ^ Greyscaled pixel value
   -> Maybe (InputAddress, PxVal)
   -- ^ Just address and value when in state 'CombinePixel', Nothing otherwise
