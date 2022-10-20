@@ -92,10 +92,9 @@ topEntity clk rst pxd vs hs = bundle
     go :: HiddenClockResetEnable Dom25MHz
        => Signal Dom25MHz (HexDigit, Index OutputNodes)
     go = displayHex <$> neuralNetwork preProcessed
-    -- TODO: Add delay to Pixel value pxd
-    -- pxd' = register 0 pxd
+    pxd' = withClockResetEnable clk reset enableGen register 0 pxd
     preProcessed = withClockResetEnable clk reset enableGen 
-      d8mProcessing pxd yx
+      d8mProcessing pxd' yx
     yx = withClockResetEnable clk reset enableGen $
       mealy coordinateCounter (False, False, 0, 0) (bundle (vs, hs))
     reset = unsafeFromLowPolarity rst
