@@ -82,10 +82,11 @@ biasPath = "src/NumberRecognition/biases.dat"
 -- @weights.dat@ and @biases.dat@, both placed in the same directory as this 
 -- file. 
 -- These files contain the parameters of the pre-trained neural network. Both 
--- files should contain newline separated values in the 'NNParam' format, 
--- binary encoded. (e.g. for @SFixed 8 8@, the files should contain strings of
--- 16 ones and zeros). The files should contain (at least) 'WeightsLength' and 
--- 'BiasesLength' parameters respectively.
+-- files should contain binary encoded, newline separated values. The values do
+-- not need to be of identical length to the @NNParam@ type, as it gets 
+-- zeroExtended to the correct length. e.g. for @NNParam@ is @SFixed 6 8@, the 
+-- data should have at least 8 bits. The files should contain (at least) 
+-- `WeightsLength' and 'BiasesLength' parameters respectively.
 neuralNetwork
   :: forall dom . HiddenClockResetEnable dom
   => Signal dom (Maybe (InputAddress, PxVal))
@@ -241,7 +242,7 @@ toSevenSegment inp = case inp of
   7  -> 0b0000111
   8  -> 0b1111111
   9  -> 0b1101111
-  _  -> 0b0001000
+  _  -> 0b0001000 -- Underscore, should not exist
 
 -- | Map the input to [0-1) and change its type.
 --
