@@ -245,9 +245,8 @@ toSevenSegment inp = case inp of
 
 -- | Map the input to [0-1) and change its type.
 --
--- Converts an Unsigned 8 to an SFixed n 8. Although the types are not hardcoded
--- here, it does assume PxVal is an Unsigned 8 and that NNParam is an SFixed. 
--- The number before the decimal point is variable, but the number after the 
--- decimal point is not.
-toNNParam :: PxVal -> NNParam
-toNNParam a = resizeF (unpack (zeroExtend (pack a)) :: SFixed 1 8)
+-- Converts a given `Unsigned a` value to an `SFixed b a`. 
+toNNParam 
+  :: forall int1 frac1 . (KnownNat int1, KnownNat frac1)
+  => Unsigned frac1 -> SFixed int1 frac1
+toNNParam a = resizeF (unpack (zeroExtend (pack a)) :: SFixed 1 frac1)
